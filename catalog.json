@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "sources": {
+    "cloudflare/skills": {
+      "ref": "cbf893b954222276bf1af57e5f23379231e0efb9",
+      "license": "Apache-2.0",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/cloudflare-skills-LICENSE"
+    },
+    "coreyhaines31/marketingskills": {
+      "ref": "1f837447b20bb6f0e72d87b80ece1c221c362c7d",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/coreyhaines31-marketingskills-LICENSE"
+    },
+    "emilkowalski/skills": {
+      "ref": "f7ce8c02d6e3c8f0d980a44c57bcc41a40254349",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/emilkowalski-skills-LICENSE"
+    },
+    "getsentry/toolkit": {
+      "ref": "10149b786037c9535ede1a2017dd488e211f6e73",
+      "license": "FSL-1.1-Apache-2.0",
+      "licensePath": "packages/cli/LICENSE.md",
+      "licenseFile": "licenses/getsentry-toolkit-cli-LICENSE.md"
+    },
+    "mattpocock/skills": {
+      "ref": "5863806dd4e15c63174bee4e7515a4256792ecfa",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/mattpocock-skills-LICENSE"
+    },
+    "microsoft/playwright-cli": {
+      "ref": "b21724888b8100b05ef8dee3a92f2bb03bf4dcde",
+      "license": "Apache-2.0",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/microsoft-playwright-cli-LICENSE"
+    },
+    "obra/superpowers": {
+      "ref": "22f0b463e7a5e579904dd6211a520321035526f7",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/obra-superpowers-LICENSE"
+    },
+    "typesafe-ai/skills": {
+      "ref": "302eea662c54bca6730873fe245bec1d69ebc23d",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/typesafe-ai-skills-LICENSE"
+    },
+    "vercel-labs/skills": {
+      "ref": "b716f9dc2ba36b6aa8f0080615e5a3a6caeac63b",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/vercel-labs-skills-LICENSE"
+    },
+    "wshobson/agents": {
+      "ref": "9c61ab243def98f72da12abd41cfcf5bcd91af9d",
+      "license": "MIT",
+      "licensePath": "LICENSE",
+      "licenseFile": "licenses/wshobson-agents-LICENSE"
+    }
+  },
+  "skills": {
+    "break-ui": {
+      "source": "emilkowalski/skills",
+      "upstreamPath": "skills/break-ui"
+    },
+    "chief-of-staff": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/in-progress/chief-of-staff"
+    },
+    "cloudflare": {
+      "source": "cloudflare/skills",
+      "upstreamPath": "skills/cloudflare"
+    },
+    "code-review": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/code-review"
+    },
+    "codebase-design": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/codebase-design"
+    },
+    "cold-email": {
+      "source": "coreyhaines31/marketingskills",
+      "upstreamPath": "skills/cold-email"
+    },
+    "diagnosing-bugs": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/diagnosing-bugs"
+    },
+    "domain-modeling": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/domain-modeling"
+    },
+    "find-skills": {
+      "source": "vercel-labs/skills",
+      "upstreamPath": "skills/find-skills"
+    },
+    "grill-me": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/productivity/grill-me"
+    },
+    "grill-with-docs": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/grill-with-docs"
+    },
+    "grilling": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/productivity/grilling"
+    },
+    "handoff": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/productivity/handoff"
+    },
+    "implement-spec": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/implement-spec"
+    },
+    "improve-codebase-architecture": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/improve-codebase-architecture"
+    },
+    "playwright-cli": {
+      "source": "microsoft/playwright-cli",
+      "upstreamPath": "skills/playwright-cli"
+    },
+    "receiving-code-review": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/receiving-code-review"
+    },
+    "retro": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/retro"
+    },
+    "sentry-cli": {
+      "source": "getsentry/toolkit",
+      "upstreamPath": "packages/cli/plugins/sentry-cli/skills/sentry-cli"
+    },
+    "setup-pre-commit": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/misc/setup-pre-commit"
+    },
+    "tdd": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/tdd"
+    },
+    "to-spec": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/to-spec"
+    },
+    "to-tickets": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/to-tickets"
+    },
+    "typesafe-ai": {
+      "source": "typesafe-ai/skills",
+      "upstreamPath": "skills/typesafe-ai"
+    },
+    "typescript-advanced-types": {
+      "source": "wshobson/agents",
+      "upstreamPath": "plugins/javascript-typescript/skills/typescript-advanced-types"
+    },
+    "verification-before-completion": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/verification-before-completion"
+    },
+    "wait-what": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/productivity/wait-what"
+    },
+    "writing-for-agents": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/productivity/writing-for-agents"
+    },
+    "writing-skills": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/writing-skills"
+    },
+    "test-driven-development": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/test-driven-development"
+    }
+  }
+}
