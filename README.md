@@ -1,67 +1,176 @@
 # Personal Agent Skills Catalog
 
-A curated, portable catalog of community skills for use across your projects
-and AI agents. This personal repository is the source of truth for selected
-skills, each pinned to an upstream commit with its provenance and license. It is
-not a FrumFinance-mandated catalog; any team rollout should be a separate,
-explicit decision.
+A personal, portable collection of third-party and locally authored agent skills.
+This repository is the source of truth, not a list of upstream installers.
+Third-party content is pinned to reviewed commits in [`catalog.json`](catalog.json).
 
-## Install the catalog for your agents
+## Install on a machine
 
-Install the whole catalog into your user-level folders for every supported agent on this machine:
-
-```sh
-npx --yes skills@1.8.1 add niebloomj/Skills --all --global --copy
-```
-
-To browse it first, run `npx --yes skills@1.8.1 add niebloomj/Skills --list`. To install selected skills, add `--skill <name>`. To sync after an approved catalog update, run `scripts/sync-skills.sh`; it removes retired `cloudflare` and `grill-me` copies before refreshing. Re-running the install command with `--force` refreshes included skills but does not remove skills dropped from the catalog:
+Requires Python 3.11+, symlink support, and a persistent checkout. GitHub CLI is needed to clone or
+check upstream sources, but installation itself uses only local files.
 
 ```sh
-npx --yes skills@1.8.1 remove --global cloudflare grill-me --yes
-npx --yes skills@1.8.1 add niebloomj/Skills --all --global --copy --force
+gh repo clone niebloomj/Skills ~/Documents/PersonalSkills
+cd ~/Documents/PersonalSkills
+python3 scripts/sync_skills.py
+python3 scripts/sync_skills.py --apply
+python3 scripts/sync_skills.py --audit
 ```
 
-For project-scoped skills, run the command from the project directory and omit `--global`. The CLI writes to each selected agent's expected skills directory. For example, the test install wrote to both `~/.openhands/skills/` and `~/.agents/skills/`.
+The first command previews changes without modifying installed skills or profile data. `--apply` backs up
+existing copies and retired entries before replacing them. `--audit` exits
+nonzero for unmanaged, divergent, retired, or unexpectedly nested global skills.
+Re-running an unchanged installation is a no-op.
 
-Merging an upstream update PR changes your approved personal catalog; it does
-not install skills anywhere. Run the sync script from your devcontainer,
-workstation setup, or agent bootstrap to update your managed environments. A
-FrumFinance-wide rollout is separate: the organization should review and pin its
-chosen catalog version rather than silently inheriting changes from this
-personal repo.
+The installer creates one definition per personal skill:
 
-The official [Vercel Skills CLI](https://github.com/vercel-labs/skills) detects supported agents and creates the appropriate agent-specific skill directories. `skills/` in this repository is the canonical catalog; the CLI can discover its skills from the GitHub repository or a local clone.
+```text
+agent/skills/name -> ~/.agents/skills/name -> this-checkout/skills/name
+```
 
-For OpenHands only, use `npx --yes skills@1.8.1 add niebloomj/Skills --all --global --copy --agent openhands`. To share a consistent selection with a particular codebase, use the project-scoped CLI install and commit that project's generated lockfile rather than asking every agent to discover skills independently.
+It detects existing Claude Code, Codex, OpenCode, Gemini, Pi, Cursor, and
+CC-Switch skill directories. It also respects an existing
+`OPENCODE_CONFIG_DIR`. Keep this checkout in place: moving it requires another
+sync. Branch switches also change the live skills, so keep the canonical checkout
+on an approved catalog revision. `scripts/sync-skills.sh` wraps the same Python command.
 
-## How updates work
+Installation never executes upstream scripts or installs their dependencies.
+Individual skills may require tools, subscriptions, plugins, or MCP servers.
+For example, `gpt-image-2` needs the Codex CLI and a suitable ChatGPT subscription.
 
-Third-party copies are pinned to immutable upstream commits in
-[`catalog.json`](catalog.json). A weekly workflow and a manual **Check upstream
-skills** action check those sources and open a pull request when selected skills
-change. It does not merge the pull request or execute upstream install scripts.
-Review the diff, skill instructions, companion files, and license before
-merging; merged content becomes the approved version in your personal catalog.
-In repository settings, select **Read and write permissions** and enable
-**Allow GitHub Actions to create and approve pull requests** under `Settings` →
-`Actions` → `General` → `Workflow permissions`. The workflow grants write
-access only to its updater job.
+## Coexist with a company registry
 
-Use the **Code** tab's **Pull requests** list to review updates. Add or remove catalog entries by editing `catalog.json` and reviewing the resulting content. The update script fails closed if a source path disappears, a skill's name changes, or an upstream file is not a regular text file.
+Keep company-managed skills with their registry rather than copying internal
+content into this public repository. Register its lockfile once:
 
-## Catalog and attribution
+```sh
+python3 scripts/sync_skills.py --external-lock /absolute/path/to/registry-lock.json
+python3 scripts/sync_skills.py --external-lock /absolute/path/to/registry-lock.json --apply
+```
 
-- [`skills/`](skills/) contains the selected skill files and required companion references.
-- [`catalog.json`](catalog.json) records each source repository, exact commit, upstream path, and license.
-- [`licenses/`](licenses/) preserves source license texts. `sentry-cli` is under Sentry's Functional Source License (FSL-1.1-Apache-2.0), whose permitted-purpose and notice terms apply. The other included source repositories identify MIT or Apache-2.0 licenses.
+An external lock must contain a `skills` mapping keyed by skill ID. The installer
+preserves those canonical definitions and repairs stale projection links. It
+does not replace registry-owned Claude-specific paths, whether real directories
+or symlinked client variants. Missing registered lockfiles are errors, not silently ignored.
 
-The curated set includes the requested actively maintained skills plus explicit skill dependencies. `grill-with-docs` delegates to `grilling` and `domain-modeling`. `break-ui` refers to `emil-design-eng` and `review-animations`; those skills' `choreograph` reference is included too. The chief-of-staff workflow includes its referenced sibling skills. The writing-skills skill includes Superpowers' `test-driven-development` reference; the separate `tdd` skill remains in the catalog as well. Architecture/spec skills include the codebase-design and TDD companions they call.
+Machine-specific configuration is private, outside this repository:
+`~/.local/state/personal-skills/config.json`. It remembers external lockfiles and
+can specify absolute `extraRoots`, explicit runtime-owned `exemptRoots`, and
+additional `retired` IDs. `externalOwners` preserves selected company repository
+discovery entries when migrating CC-Switch.
 
-Some requested sources were not copied:
+An exact-path `retainedDanglingLinks` list can acknowledge deliberately retained
+broken links. Audits still display them as warnings. If a target becomes an
+active unmanaged skill, it is an error again, not a permanent ownership exception.
 
-- Matt Pocock's `resolving-merge-conflicts` has been removed upstream. The old `diagnose` skill was renamed `diagnosing-bugs`; that current skill is included.
-- The Remotion skills repository has no repository-level license declaration, so its content is not redistributed here pending permission or licensing clarification.
-- The anti-detect-browser skills teach browser fingerprint spoofing and cross-site identity techniques. They are excluded from this catalog's default selection because they can enable identity and bot-detection evasion.
-- Sentry CLI asks agents to confirm destructive commands before running them. Review any skill before installing it: skills are instructions to agents and may guide privileged actions in the user's environment.
+Application-bundled/system skills, enabled native runtime plugins, and
+project-local contributor skills remain with their owners. Runtime-synchronized
+skill containers must be explicitly listed in `exemptRoots`. Unknown personal
+skills, including dangling links to temporarily unavailable storage, are reported
+but never removed unless explicitly retired.
 
-This catalog is intentionally a small, reviewed distribution point, not an automatic mirror of every upstream repository.
+## CC-Switch
+
+Fully quit CC-Switch, including its tray process, then preview and apply:
+
+```sh
+python3 scripts/sync_skills.py --cc-switch
+python3 scripts/sync_skills.py --cc-switch --apply
+python3 scripts/sync_skills.py --audit
+```
+
+The optional Unix offline adapter is tested against CC Switch 4.0.35. It snapshots the
+database and settings, checks the schema and concurrent changes, preserves every
+existing app-enablement flag and installation timestamp, and selects shared
+storage with symlink-only projections. Unrelated preferences are preserved.
+
+Personal rows intentionally become **Local** in CC-Switch. This prevents its
+updater from replacing repository links with independent upstream downloads.
+Upstream provenance remains in this catalog and each row's repository URL.
+Only superseded source repositories are disabled; unrelated discovery choices
+are preserved. Use this repository for content updates, not CC-Switch's update or uninstall buttons. CC-Switch can
+still manage app projections; shared compatibility directories mean its flags
+do not provide complete per-agent skill isolation.
+
+The offline adapter is remembered for subsequent syncs, which require CC-Switch
+to remain closed. If metadata migration fails, unchanged filesystem edits roll
+back. Concurrent user edits are left intact and reported, with originals retained
+in the private backup for reconciliation.
+Private backups are under `~/.local/state/personal-skills/backups/`; they can
+contain private configuration and must never be committed or shared.
+
+## Names, invocation, and dependencies
+
+- `sentry-code-review`: Sentry's general correctness, security, performance, and
+  testing checklist.
+- `standards-spec-review`: Matt Pocock's separate standards/spec review,
+  explicitly invoked. There is no generic `code-review` ID in this catalog;
+  application-bundled commands are outside its scope.
+- Superpowers' complete fourteen-skill set shares one upstream revision. Its
+  skill references are unqualified so no `superpowers:` plugin namespace is
+  required. The duplicate Codex Superpowers plugin is disabled only when all
+  fourteen replacements are present; native runtime plugins are untouched.
+- `grill-me` is retired in favor of `grilling`.
+- Trail of Bits retired `ask-questions-if-underspecified`; its obsolete copy is
+  removed rather than frozen into this collection.
+- Standalone Codex runtime-helper copies are retired. Their native plugin
+  remains responsible for the matching helpers and runtime scripts.
+- Curation retirements are recorded in `catalog.json`. Sync backs up and removes
+  their global projections and CC-Switch rows instead of reinstalling them.
+
+Vendored invocation-only skills carry both standard `disable-model-invocation` metadata
+and Codex's `policy.allow_implicit_invocation: false`. Workflows such as
+`second-opinion` and `standards-spec-review` are explicit-only. User and project
+approval, scope, and delegation rules still take precedence over imported workflows.
+
+## Add your own skill
+
+Create `skills/my-workflow/SKILL.md` with `name: my-workflow` and a useful
+`description` in YAML frontmatter. Add this catalog entry:
+
+```json
+"my-workflow": {"local": true}
+```
+
+Locally authored skills have no invented upstream pin and are never replaced by
+the upstream updater. Keep their supporting files beside `SKILL.md`.
+
+## Review and update
+
+A weekly workflow and manual **Check upstream skills** action propose upstream
+changes as draft PRs. Merging a PR updates the approved catalog, not installations
+on other machines. Pull the reviewed catalog and run the sync/audit commands on
+each machine. Do not refresh this collection through separate upstream installers.
+
+```sh
+python3 -m unittest discover -s tests -v
+python3 scripts/update_skills.py --check
+python3 scripts/update_skills.py --verify-pins
+```
+
+To import new third-party entries after recording their source, commit, path,
+and license, use `python3 scripts/update_skills.py --vendor`. It stages all
+downloads before replacement, preserves executable companions, and fails closed
+on missing paths, renamed skills, unsafe file types, or oversized content.
+
+Renames (`upstreamName`), explicit invocation (`manual`), Markdown reference
+rewrites (`replaceMarkdown`), and optional gallery exclusions (`exclude`) are
+recorded transformations, reproduced by imports, verification, and updates.
+Codex display names and manual-only policy are normalized for portable discovery.
+The GPT Image 2 example gallery is excluded: its images are linked remotely and
+are not dependencies of the included generation helpers.
+
+## Attribution and licenses
+
+[`catalog.json`](catalog.json) records every upstream repository, immutable
+commit, selected path, transformation, and license notice.
+[`licenses/`](licenses/) preserves those notices verbatim. Trail of Bits content
+is CC-BY-SA-4.0; Sentry CLI uses FSL-1.1-Apache-2.0. Other selected sources declare
+MIT or Apache-2.0. Those source-specific terms still apply to their content.
+
+One upstream publishes an MIT declaration in its README rather than a standalone
+license file. The declaration and limitation are explicitly preserved in the
+catalog and notice; no missing license text is invented.
+
+Remotion remains excluded pending licensing clarification. Browser fingerprint
+spoofing/identity-evasion skills are not part of this curated collection.

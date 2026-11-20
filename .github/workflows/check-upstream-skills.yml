@@ -5,7 +5,8 @@ on:
     paths:
       - catalog.json
       - licenses/**
-      - scripts/update_skills.py
+      - scripts/**
+      - tests/**
       - skills/**
       - .github/workflows/check-upstream-skills.yml
   push:
@@ -13,7 +14,8 @@ on:
     paths:
       - catalog.json
       - licenses/**
-      - scripts/update_skills.py
+      - scripts/**
+      - tests/**
       - skills/**
       - .github/workflows/check-upstream-skills.yml
   schedule:
@@ -39,8 +41,9 @@ jobs:
           python-version: "3.12"
       - name: Validate the pinned skill catalog
         run: |
+          python -m unittest discover -s tests -v
           python scripts/update_skills.py --check
-          git diff --check -- . ':(exclude)licenses/**'
+          git diff --check -- . ':(exclude)licenses/**' ':(exclude)skills/**'
       - if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
         name: Verify upstream content matches its pinned commits
         env:
@@ -80,7 +83,7 @@ jobs:
         name: Validate refreshed catalog
         run: |
           python scripts/update_skills.py --check
-          git diff --check -- . ':(exclude)licenses/**'
+          git diff --check -- . ':(exclude)licenses/**' ':(exclude)skills/**'
       - if: steps.open_pr.outputs.skip != 'true'
         name: Open a reviewable update pull request
         env:
@@ -100,6 +103,7 @@ jobs:
           git commit -m "chore: update curated upstream skills"
           git push origin "$branch"
           gh pr create \
+            --draft \
             --base main \
             --head "$branch" \
             --title "Update curated upstream skills" \

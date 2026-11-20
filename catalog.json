@@ -1,6 +1,38 @@
 {
   "schemaVersion": 1,
+  "repository": "niebloomj/Skills",
+  "retired": {
+    "ask-questions-if-underspecified": "Removed by its upstream maintainer because clarification is native agent behavior: https://github.com/trailofbits/skills/pull/214",
+    "claude-md-improver": "Use agents-md for the retained cross-agent instruction-file workflow.",
+    "cloudflare": "Previously removed from the curated catalog.",
+    "code-review": "Use sentry-code-review or standards-spec-review.",
+    "codex-cli-runtime": "Runtime-owned helper supplied by the Codex plugin, not a standalone skill.",
+    "codex-result-handling": "Runtime-owned helper supplied by the Codex plugin, not a standalone skill.",
+    "driving-claude-code-sessions": "Separate permission-bypassed tmux worker-management stack, excluded from this catalog.",
+    "find-bugs": "Overlaps the retained named review skills and the company-managed full-pr-review.",
+    "grill-me": "Replaced upstream by grilling.",
+    "parallel-debugging": "Additional debugging workflow overlapping the retained diagnosis skills.",
+    "proactive-agent": "Separate autonomy, identity, memory and heartbeat framework, excluded from this catalog.",
+    "python-executor": "External code-execution service, excluded in favor of local Python execution.",
+    "python-type-safety": "General instructional material with little additional value alongside the retained Python guidance.",
+    "remembering-conversations": "Requires a separate episodic-memory backend rather than the existing memory workflow.",
+    "security-review": "Broad web-app checklist overlapping the retained specialist security skills.",
+    "skill-improver": "Requires an external plugin workflow and reviewer that are not self-contained in the skill."
+  },
   "skills": {
+    "agentic-actions-auditor": {
+      "source": "trailofbits/skills",
+      "upstreamPath": "plugins/agentic-actions-auditor/skills/agentic-actions-auditor"
+    },
+    "agents-md": {
+      "source": "getsentry/skills",
+      "upstreamPath": "skills/agents-md"
+    },
+    "brainstorming": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/brainstorming",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
     "break-ui": {
       "source": "emilkowalski/skills",
       "upstreamPath": "skills/break-ui"
@@ -13,9 +45,9 @@
       "source": "emilkowalski/skills",
       "upstreamPath": "skills/choreograph"
     },
-    "code-review": {
-      "source": "mattpocock/skills",
-      "upstreamPath": "skills/engineering/code-review"
+    "code-simplifier": {
+      "source": "getsentry/skills",
+      "upstreamPath": "skills/code-simplifier"
     },
     "codebase-design": {
       "source": "mattpocock/skills",
@@ -29,6 +61,11 @@
       "source": "mattpocock/skills",
       "upstreamPath": "skills/engineering/diagnosing-bugs"
     },
+    "dispatching-parallel-agents": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/dispatching-parallel-agents",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
     "domain-modeling": {
       "source": "mattpocock/skills",
       "upstreamPath": "skills/engineering/domain-modeling"
@@ -37,9 +74,32 @@
       "source": "emilkowalski/skills",
       "upstreamPath": "skills/emil-design-eng"
     },
+    "executing-plans": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/executing-plans",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
     "find-skills": {
       "source": "vercel-labs/skills",
       "upstreamPath": "skills/find-skills"
+    },
+    "finding-duplicate-functions": {
+      "source": "obra/superpowers-lab",
+      "upstreamPath": "skills/finding-duplicate-functions"
+    },
+    "finishing-a-development-branch": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/finishing-a-development-branch",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
+    "gha-security-review": {
+      "source": "getsentry/skills",
+      "upstreamPath": "skills/gha-security-review"
+    },
+    "gpt-image-2": {
+      "source": "agentspace-so/agent-skills",
+      "upstreamPath": "gpt-image-2",
+      "exclude": ["gallery/*"]
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",
@@ -55,11 +115,16 @@
     },
     "implement-spec": {
       "source": "mattpocock/skills",
-      "upstreamPath": "skills/engineering/implement-spec"
+      "upstreamPath": "skills/engineering/implement-spec",
+      "replaceMarkdown": {"`code-review`": "`standards-spec-review`"}
     },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
       "upstreamPath": "skills/engineering/improve-codebase-architecture"
+    },
+    "modern-python": {
+      "source": "trailofbits/skills",
+      "upstreamPath": "plugins/modern-python/skills/modern-python"
     },
     "playwright-cli": {
       "source": "microsoft/playwright-cli",
@@ -67,7 +132,13 @@
     },
     "receiving-code-review": {
       "source": "obra/superpowers",
-      "upstreamPath": "skills/receiving-code-review"
+      "upstreamPath": "skills/receiving-code-review",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
+    "requesting-code-review": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/requesting-code-review",
+      "replaceMarkdown": {"superpowers:": ""}
     },
     "retro": {
       "source": "mattpocock/skills",
@@ -77,6 +148,25 @@
       "source": "emilkowalski/skills",
       "upstreamPath": "skills/review-animations"
     },
+    "second-opinion": {
+      "source": "trailofbits/skills",
+      "upstreamPath": "plugins/second-opinion/skills/second-opinion",
+      "manual": true
+    },
+    "security-best-practices": {
+      "source": "openai/skills",
+      "upstreamPath": "skills/.curated/security-best-practices"
+    },
+    "security-threat-model": {
+      "source": "openai/skills",
+      "upstreamPath": "skills/.curated/security-threat-model"
+    },
+    "sentry-code-review": {
+      "source": "getsentry/skills",
+      "upstreamPath": "skills/code-review",
+      "upstreamName": "code-review",
+      "previousNames": ["code-review"]
+    },
     "sentry-cli": {
       "source": "getsentry/toolkit",
       "upstreamPath": "packages/cli/plugins/sentry-cli/skills/sentry-cli"
@@ -85,13 +175,40 @@
       "source": "mattpocock/skills",
       "upstreamPath": "skills/misc/setup-pre-commit"
     },
+    "setup-matt-pocock-skills": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/setup-matt-pocock-skills",
+      "manual": true
+    },
+    "sharp-edges": {
+      "source": "trailofbits/skills",
+      "upstreamPath": "plugins/sharp-edges/skills/sharp-edges"
+    },
+    "standards-spec-review": {
+      "source": "mattpocock/skills",
+      "upstreamPath": "skills/engineering/code-review",
+      "upstreamName": "code-review",
+      "manual": true
+    },
+    "subagent-driven-development": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/subagent-driven-development",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
+    "systematic-debugging": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/systematic-debugging",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
     "tdd": {
       "source": "mattpocock/skills",
-      "upstreamPath": "skills/engineering/tdd"
+      "upstreamPath": "skills/engineering/tdd",
+      "replaceMarkdown": {"`code-review`": "`standards-spec-review`"}
     },
     "test-driven-development": {
       "source": "obra/superpowers",
-      "upstreamPath": "skills/test-driven-development"
+      "upstreamPath": "skills/test-driven-development",
+      "replaceMarkdown": {"superpowers:": ""}
     },
     "to-spec": {
       "source": "mattpocock/skills",
@@ -109,9 +226,20 @@
       "source": "wshobson/agents",
       "upstreamPath": "plugins/javascript-typescript/skills/typescript-advanced-types"
     },
+    "using-git-worktrees": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/using-git-worktrees",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
+    "using-superpowers": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/using-superpowers",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
     "verification-before-completion": {
       "source": "obra/superpowers",
-      "upstreamPath": "skills/verification-before-completion"
+      "upstreamPath": "skills/verification-before-completion",
+      "replaceMarkdown": {"superpowers:": ""}
     },
     "wait-what": {
       "source": "mattpocock/skills",
@@ -121,12 +249,28 @@
       "source": "mattpocock/skills",
       "upstreamPath": "skills/productivity/writing-for-agents"
     },
+    "working-with-claude-code": {
+      "source": "obra/superpowers-developing-for-claude-code",
+      "upstreamPath": "skills/working-with-claude-code"
+    },
+    "writing-plans": {
+      "source": "obra/superpowers",
+      "upstreamPath": "skills/writing-plans",
+      "replaceMarkdown": {"superpowers:": ""}
+    },
     "writing-skills": {
       "source": "obra/superpowers",
-      "upstreamPath": "skills/writing-skills"
+      "upstreamPath": "skills/writing-skills",
+      "replaceMarkdown": {"superpowers:": ""}
     }
   },
   "sources": {
+    "agentspace-so/agent-skills": {
+      "license": "MIT",
+      "licenseFile": "licenses/agentspace-so-agent-skills-LICENSE",
+      "licensePath": "LICENSE",
+      "ref": "18d61002379d024d8754318171479968c68ff6c4"
+    },
     "coreyhaines31/marketingskills": {
       "license": "MIT",
       "licenseFile": "licenses/coreyhaines31-marketingskills-LICENSE",
@@ -145,6 +289,12 @@
       "licensePath": "packages/cli/LICENSE.md",
       "ref": "10149b786037c9535ede1a2017dd488e211f6e73"
     },
+    "getsentry/skills": {
+      "license": "Apache-2.0",
+      "licenseFile": "licenses/getsentry-skills-LICENSE",
+      "licensePath": "LICENSE",
+      "ref": "a582c51ee29d0f35e6ac321340796f77d43da733"
+    },
     "mattpocock/skills": {
       "license": "MIT",
       "licenseFile": "licenses/mattpocock-skills-LICENSE",
@@ -162,6 +312,31 @@
       "licenseFile": "licenses/obra-superpowers-LICENSE",
       "licensePath": "LICENSE",
       "ref": "22f0b463e7a5e579904dd6211a520321035526f7"
+    },
+    "obra/superpowers-developing-for-claude-code": {
+      "license": "MIT",
+      "licenseFile": "licenses/obra-superpowers-developing-for-claude-code-README.md",
+      "licensePath": "README.md",
+      "licenseNote": "Upstream README declares MIT and references a LICENSE file that is not present; the declaration is preserved verbatim.",
+      "ref": "74afe935da49efe782907e837a27ce618498099a"
+    },
+    "obra/superpowers-lab": {
+      "license": "MIT",
+      "licenseFile": "licenses/obra-superpowers-lab-LICENSE",
+      "licensePath": "LICENSE",
+      "ref": "51111f74f24058117752d9aa917cb19859f8ec86"
+    },
+    "openai/skills": {
+      "license": "Apache-2.0",
+      "licenseFile": "licenses/openai-security-skills-LICENSE.txt",
+      "licensePath": "skills/.curated/security-best-practices/LICENSE.txt",
+      "ref": "49f948faa9258a0c61caceaf225e179651397431"
+    },
+    "trailofbits/skills": {
+      "license": "CC-BY-SA-4.0",
+      "licenseFile": "licenses/trailofbits-skills-LICENSE",
+      "licensePath": "LICENSE",
+      "ref": "149d7b21f4067765b82e67029730b42d228ef4b4"
     },
     "typesafe-ai/skills": {
       "license": "MIT",

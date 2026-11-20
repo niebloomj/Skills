@@ -8,11 +8,10 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 import tempfile
-import urllib.error
 import urllib.parse
-import urllib.request
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -26,13 +25,29 @@ SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 def request(url: str) -> bytes:
-    headers = {"User-Agent": "frumfinance-skills-updater", "Accept": "application/vnd.github+json"}
-    token = os.environ.get("GITHUB_TOKEN")
-    if token and urllib.parse.urlsplit(url).hostname == "api.github.com":
-        headers["Authorization"] = f"Bearer {token}"
-    req = urllib.request.Request(url, headers=headers)
-    with urllib.request.urlopen(req, timeout=45) as response:
-        return response.read(MAX_FILE_BYTES + 1)
+    parsed = urllib.parse.urlsplit(url)
+    if parsed.hostname == "api.github.com":
+        endpoint = parsed.path.lstrip("/") + ("?" + parsed.query if parsed.query else "")
+        arguments = ["gh", "api", endpoint]
+        if "/git/trees/" in endpoint:
+            arguments.extend(["--cache", "24h"])
+    elif parsed.hostname == "raw.githubusercontent.com":
+        owner, repository, ref, path = parsed.path.lstrip("/").split("/", 3)
+        arguments = [
+            "gh",
+            "api",
+            f"repos/{owner}/{repository}/contents/{path}?ref={ref}",
+            "-H",
+            "Accept: application/vnd.github.raw+json",
+            "--cache",
+            "24h",
+        ]
+    else:
+        raise ValueError(f"Unsupported upstream host: {parsed.hostname}")
+    result = subprocess.run(arguments, capture_output=True, timeout=60, check=False)
+    if result.returncode:
+        raise ValueError(result.stderr.decode("utf-8", errors="replace").strip())
+    return result.stdout
 
 
 def json_request(url: str) -> dict[str, Any]:
@@ -44,13 +59,36 @@ def json_request(url: str) -> dict[str, Any]:
 
 def safe_relative_path(raw: str) -> PurePosixPath:
     path = PurePosixPath(raw)
-    if "\\" in raw or path.is_absolute() or not path.parts or any(part in {"", ".", ".."} for part in path.parts):
+    if (
+        "\\" in raw
+        or path.is_absolute()
+        or not path.parts
+        or any(part in {"", ".", ".."} for part in path.parts)
+    ):
         raise ValueError(f"Unsafe repository path: {raw!r}")
     return path
 
 
+def repository_path(relative: str, root: Path | None = None) -> Path:
+    project = ROOT if root is None else root
+    path = project
+    for part in safe_relative_path(relative).parts:
+        path = path / part
+        if path.is_symlink():
+            raise ValueError(f"Repository paths cannot contain a symlink: {path}")
+    if not path.resolve().is_relative_to(project.resolve()):
+        raise ValueError(f"Repository path points outside the checkout: {path}")
+    return path
+
+
+def source_prefix(source_path: str) -> str:
+    return (
+        "" if source_path == "." else safe_relative_path(source_path).as_posix().rstrip("/") + "/"
+    )
+
+
 def skill_files(tree: dict[str, Any], source_path: str) -> list[dict[str, Any]]:
-    prefix = safe_relative_path(source_path).as_posix().rstrip("/") + "/"
+    prefix = source_prefix(source_path)
     entries = [entry for entry in tree["tree"] if entry["path"].startswith(prefix)]
     if not entries:
         raise ValueError(f"Upstream skill directory not found: {source_path}")
@@ -62,8 +100,12 @@ def skill_files(tree: dict[str, Any], source_path: str) -> list[dict[str, Any]]:
         or (entry["type"] == "tree" and entry.get("mode") != "040000")
         for entry in entries
     ):
-        raise ValueError(f"Upstream skill contains a symlink, submodule, or non-regular file: {source_path}")
-    return sorted((entry for entry in entries if entry["type"] == "blob"), key=lambda entry: entry["path"])
+        raise ValueError(
+            f"Upstream skill contains a symlink, submodule, or non-regular file: {source_path}"
+        )
+    return sorted(
+        (entry for entry in entries if entry["type"] == "blob"), key=lambda entry: entry["path"]
+    )
 
 
 def validate_skill(name: str, files: dict[str, bytes]) -> None:
@@ -74,9 +116,13 @@ def validate_skill(name: str, files: dict[str, bytes]) -> None:
     if not text.startswith("---\n") or "\n---\n" not in text[4:]:
         raise ValueError(f"{name}: SKILL.md has no valid YAML frontmatter block")
     frontmatter = text[4 : text.index("\n---\n", 4)]
-    skill_name = re.search(r"^name:\s*([A-Za-z0-9_-]+)\s*$", frontmatter, re.MULTILINE)
+    skill_name = re.search(
+        r"^name:\s*(?P<quote>['\"]?)(?P<name>[A-Za-z0-9_-]+)(?P=quote)\s*$",
+        frontmatter,
+        re.MULTILINE,
+    )
     description = re.search(r"^description:\s*(\S.*)$", frontmatter, re.MULTILINE)
-    if not skill_name or skill_name.group(1) != name:
+    if not skill_name or skill_name.group("name") != name:
         raise ValueError(f"{name}: upstream skill name changed or does not match the catalog")
     if not description:
         raise ValueError(f"{name}: SKILL.md description is missing")
@@ -88,21 +134,128 @@ def validate_skill(name: str, files: dict[str, bytes]) -> None:
         data.decode("utf-8")
 
 
+def codex_manual_policy(content: bytes) -> bytes:
+    text = content.decode("utf-8")
+    if text and not text.endswith("\n"):
+        text += "\n"
+    block = re.search(r"(?m)^policy:[ \t]*\n(?P<body>(?:[ \t]+[^\n]*\n|[ \t]*\n)*)", text)
+    if block is None:
+        if re.search(r"(?m)^policy:", text):
+            raise ValueError("Unsupported Codex policy syntax; review the upstream metadata")
+        return (text + "policy:\n  allow_implicit_invocation: false\n").encode("utf-8")
+    body = block["body"]
+    if re.search(r"(?m)^[ \t]+allow_implicit_invocation:", body):
+        body, count = re.subn(
+            r"(?m)^([ \t]+allow_implicit_invocation:[ \t]*)(?:true|false)([ \t]*(?:#.*)?)$",
+            r"\g<1>false\2",
+            body,
+        )
+        if count != 1:
+            raise ValueError("Ambiguous Codex invocation policy; review the upstream metadata")
+    else:
+        body = "  allow_implicit_invocation: false\n" + body
+    return (text[: block.start("body")] + body + text[block.end("body") :]).encode("utf-8")
+
+
+def render_skill(name: str, entry: dict[str, Any], files: dict[str, bytes]) -> dict[str, bytes]:
+    upstream_name = entry.get("upstreamName", name)
+    validate_skill(upstream_name, files)
+    rendered = dict(files)
+    if name != upstream_name or entry.get("manual"):
+        text = rendered["SKILL.md"].decode("utf-8")
+        boundary = text.index("\n---\n", 4)
+        frontmatter = text[4:boundary]
+        if name != upstream_name:
+            frontmatter = re.sub(
+                r"^name:.*$", f"name: {name}", frontmatter, count=1, flags=re.MULTILINE
+            )
+        if entry.get("manual"):
+            if re.search(r"^disable-model-invocation:", frontmatter, re.MULTILINE):
+                frontmatter = re.sub(
+                    r"^disable-model-invocation:.*$",
+                    "disable-model-invocation: true",
+                    frontmatter,
+                    flags=re.MULTILINE,
+                )
+            else:
+                frontmatter += "\ndisable-model-invocation: true"
+        rendered["SKILL.md"] = ("---\n" + frontmatter + text[boundary:]).encode("utf-8")
+        if name != upstream_name and "agents/openai.yaml" in rendered:
+            metadata = rendered["agents/openai.yaml"].decode("utf-8")
+            metadata = re.sub(
+                r"(?m)^([ \t]*display_name:)[^\n]*$",
+                lambda match: match[1] + " " + json.dumps(name),
+                metadata,
+            )
+            rendered["agents/openai.yaml"] = metadata.encode("utf-8")
+    for relative, content in rendered.items():
+        if relative.endswith(".md"):
+            text = content.decode("utf-8")
+            for old, new in entry.get("replaceMarkdown", {}).items():
+                text = text.replace(old, new)
+            rendered[relative] = text.encode("utf-8")
+    frontmatter = rendered["SKILL.md"].decode("utf-8").split("\n---\n", 1)[0]
+    if re.search(r"(?m)^disable-model-invocation:[ \t]*true[ \t]*$", frontmatter):
+        rendered["agents/openai.yaml"] = codex_manual_policy(
+            rendered.get("agents/openai.yaml", b"")
+        )
+    validate_skill(name, rendered)
+    return rendered
+
+
+def validate_previous_names(name: str, entry: dict[str, Any]) -> list[str]:
+    aliases = entry.get("previousNames", [])
+    if not isinstance(aliases, list) or any(
+        not isinstance(alias, str)
+        or not re.fullmatch(r"[a-z0-9][a-z0-9-]*", alias)
+        or alias == name
+        for alias in aliases
+    ):
+        raise ValueError(f"{name}: previousNames must be a list of distinct, previous skill IDs")
+    if len(aliases) != len(set(aliases)):
+        raise ValueError(f"{name}: previousNames contains duplicate skill IDs")
+    return aliases
+
+
 def load_catalog() -> dict[str, Any]:
     catalog = json.loads(CATALOG_PATH.read_text(encoding="utf-8"))
-    if catalog.get("schemaVersion") != 1 or not catalog.get("sources") or not catalog.get("skills"):
+    if (
+        catalog.get("schemaVersion") != 1
+        or not isinstance(catalog.get("sources"), dict)
+        or not catalog.get("skills")
+    ):
         raise ValueError("catalog.json has an unsupported or incomplete schema")
     destinations: set[str] = set()
     for name, skill in catalog["skills"].items():
         if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", name):
             raise ValueError(f"Invalid skill name: {name}")
+        validate_previous_names(name, skill)
         destination = f"skills/{name}"
         if destination in destinations:
             raise ValueError(f"Duplicate destination: {destination}")
         destinations.add(destination)
+        if skill.get("local") is True:
+            if "source" in skill or "upstreamPath" in skill:
+                raise ValueError(f"{name}: authored skills cannot also declare an upstream source")
+            continue
         if skill.get("source") not in catalog["sources"]:
             raise ValueError(f"{name}: source is not present in catalog.json")
-        safe_relative_path(skill["upstreamPath"])
+        source_prefix(skill["upstreamPath"])
+        if not re.fullmatch(r"[a-z0-9][a-z0-9-]*", skill.get("upstreamName", name)):
+            raise ValueError(f"{name}: invalid upstreamName")
+        if "manual" in skill and not isinstance(skill["manual"], bool):
+            raise ValueError(f"{name}: manual must be a boolean")
+        replacements = skill.get("replaceMarkdown", {})
+        if not isinstance(replacements, dict) or any(
+            not isinstance(old, str) or not old or not isinstance(new, str)
+            for old, new in replacements.items()
+        ):
+            raise ValueError(f"{name}: replaceMarkdown must map nonempty strings to strings")
+        excludes = skill.get("exclude", [])
+        if not isinstance(excludes, list):
+            raise ValueError(f"{name}: exclude must be a list of relative glob patterns")
+        for pattern in excludes:
+            safe_relative_path(pattern)
     for source, details in catalog["sources"].items():
         if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", source):
             raise ValueError(f"Invalid GitHub repository: {source}")
@@ -117,11 +270,13 @@ def load_catalog() -> dict[str, Any]:
 
 def validate_local(catalog: dict[str, Any]) -> None:
     expected_dirs = {name for name in catalog["skills"]}
-    actual_dirs = {path.name for path in (ROOT / "skills").iterdir() if path.is_dir()}
+    actual_dirs = {path.name for path in repository_path("skills").iterdir() if path.is_dir()}
     if actual_dirs != expected_dirs:
-        raise ValueError(f"Catalog folder mismatch; missing={sorted(expected_dirs - actual_dirs)}, extra={sorted(actual_dirs - expected_dirs)}")
+        raise ValueError(
+            f"Catalog folder mismatch; missing={sorted(expected_dirs - actual_dirs)}, extra={sorted(actual_dirs - expected_dirs)}"
+        )
     for name, entry in catalog["skills"].items():
-        folder = ROOT / "skills" / name
+        folder = repository_path(f"skills/{name}")
         files: dict[str, bytes] = {}
         for path in folder.rglob("*"):
             if path.is_symlink():
@@ -130,7 +285,7 @@ def validate_local(catalog: dict[str, Any]) -> None:
                 files[path.relative_to(folder).as_posix()] = path.read_bytes()
         validate_skill(name, files)
     for details in catalog["sources"].values():
-        license_file = ROOT / safe_relative_path(details["licenseFile"]).as_posix()
+        license_file = repository_path(details["licenseFile"])
         if not license_file.is_file() or not license_file.read_bytes().strip():
             raise ValueError(f"Missing or empty license file: {details['licenseFile']}")
 
@@ -153,19 +308,28 @@ def read_source(repository: str, ref: str, path: str) -> bytes:
     return data
 
 
-def fetch_skill(repository: str, ref: str, source_path: str, name: str, tree_cache: dict[tuple[str, str], dict[str, Any]]) -> dict[str, bytes]:
+def fetch_skill(
+    repository: str,
+    ref: str,
+    source_path: str,
+    name: str,
+    tree_cache: dict[tuple[str, str], dict[str, Any]],
+    exclude: list[str] | None = None,
+) -> dict[str, bytes]:
     key = (repository, ref)
     if key not in tree_cache:
         tree = json_request(f"{API}/repos/{repository}/git/trees/{ref}?recursive=1")
         if tree.get("truncated"):
             raise ValueError(f"GitHub returned a truncated repository tree for {repository}")
         tree_cache[key] = tree
-    prefix = safe_relative_path(source_path).as_posix().rstrip("/") + "/"
+    prefix = source_prefix(source_path)
     files: dict[str, bytes] = {}
     total = 0
     for entry in skill_files(tree_cache[key], source_path):
         relative = entry["path"][len(prefix) :]
         safe_relative_path(relative)
+        if any(PurePosixPath(relative).match(pattern) for pattern in exclude or []):
+            continue
         data = read_source(repository, ref, entry["path"])
         total += len(data)
         if total > MAX_SKILL_BYTES:
@@ -176,7 +340,7 @@ def fetch_skill(repository: str, ref: str, source_path: str, name: str, tree_cac
 
 
 def current_files(name: str) -> dict[str, bytes]:
-    folder = ROOT / "skills" / name
+    folder = repository_path(f"skills/{name}")
     files: dict[str, bytes] = {}
     if not folder.is_dir() or folder.is_symlink():
         raise ValueError(f"Missing or unsafe catalog folder: skills/{name}")
@@ -191,18 +355,114 @@ def current_files(name: str) -> dict[str, bytes]:
 def verify_pins(catalog: dict[str, Any]) -> None:
     tree_cache: dict[tuple[str, str], dict[str, Any]] = {}
     for name, skill in catalog["skills"].items():
+        if skill.get("local") is True:
+            continue
         source = catalog["sources"][skill["source"]]
-        pinned_files = fetch_skill(
-            skill["source"], source["ref"], skill["upstreamPath"], name, tree_cache
+        pinned_files = render_skill(
+            name,
+            skill,
+            fetch_skill(
+                skill["source"],
+                source["ref"],
+                skill["upstreamPath"],
+                skill.get("upstreamName", name),
+                tree_cache,
+                exclude=skill.get("exclude"),
+            ),
         )
         if pinned_files != current_files(name):
             raise ValueError(f"skills/{name} does not match its pinned upstream source")
     for repository, details in catalog["sources"].items():
         license_data = read_source(repository, details["ref"], details["licensePath"])
-        license_path = ROOT / safe_relative_path(details["licenseFile"]).as_posix()
+        license_path = repository_path(details["licenseFile"])
         if license_data != license_path.read_bytes():
-            raise ValueError(f"{details['licenseFile']} does not match {repository}@{details['ref']}")
-    print(f"Pinned content verified: {len(catalog['skills'])} skills from {len(catalog['sources'])} repositories.")
+            raise ValueError(
+                f"{details['licenseFile']} does not match {repository}@{details['ref']}"
+            )
+    count = sum(skill.get("local") is not True for skill in catalog["skills"].values())
+    print(
+        f"Pinned content verified: {count} upstream skills from {len(catalog['sources'])} repositories."
+    )
+
+
+def stage_skill(
+    folder: Path,
+    skill: dict[str, Any],
+    ref: str,
+    files: dict[str, bytes],
+    tree_cache: dict[tuple[str, str], dict[str, Any]],
+) -> None:
+    tree = tree_cache.get((skill["source"], ref), {"tree": []})
+    modes = {entry["path"]: entry.get("mode") for entry in tree["tree"]}
+    prefix = source_prefix(skill["upstreamPath"])
+    for relative, data in files.items():
+        target = folder / safe_relative_path(relative).as_posix()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(data)
+        target.chmod(0o755 if modes.get(prefix + relative) == "100755" else 0o644)
+
+
+def vendor_catalog(catalog: dict[str, Any]) -> None:
+    repository_path("skills")
+    repository_path("licenses")
+    for name in catalog["skills"]:
+        repository_path(f"skills/{name}")
+    for source in catalog["sources"].values():
+        repository_path(source["licenseFile"])
+    tree_cache: dict[tuple[str, str], dict[str, Any]] = {}
+    replacements: list[tuple[Path, Path | None]] = []
+    with tempfile.TemporaryDirectory(prefix="skills-vendor-", dir=ROOT) as temporary:
+        staging = Path(temporary)
+        destinations: list[Path] = []
+        for name, skill in catalog["skills"].items():
+            if skill.get("local") is True:
+                validate_skill(name, current_files(name))
+                continue
+            source = catalog["sources"][skill["source"]]
+            files = render_skill(
+                name,
+                skill,
+                fetch_skill(
+                    skill["source"],
+                    source["ref"],
+                    skill["upstreamPath"],
+                    skill.get("upstreamName", name),
+                    tree_cache,
+                    exclude=skill.get("exclude"),
+                ),
+            )
+            stage_skill(staging / "skills" / name, skill, source["ref"], files, tree_cache)
+            destinations.append(Path("skills") / name)
+            print(f"Staged skills/{name}", flush=True)
+        for repository, source in catalog["sources"].items():
+            relative = Path(safe_relative_path(source["licenseFile"]).as_posix())
+            data = read_source(repository, source["ref"], source["licensePath"])
+            data.decode("utf-8")
+            target = staging / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(data)
+            destinations.append(relative)
+        try:
+            for index, relative in enumerate(destinations):
+                destination = repository_path(relative.as_posix())
+                if destination.is_symlink():
+                    raise ValueError(f"Refusing to replace a symlink: {relative}")
+                backup = staging / "backups" / str(index) if destination.exists() else None
+                if backup is not None:
+                    backup.parent.mkdir(parents=True, exist_ok=True)
+                    os.replace(destination, backup)
+                replacements.append((destination, backup))
+                destination.parent.mkdir(parents=True, exist_ok=True)
+                os.replace(staging / relative, destination)
+        except Exception:
+            for destination, backup in reversed(replacements):
+                if destination.is_dir():
+                    shutil.rmtree(destination)
+                else:
+                    destination.unlink(missing_ok=True)
+                if backup is not None:
+                    os.replace(backup, destination)
+            raise
 
 
 def update_catalog(catalog: dict[str, Any]) -> list[str]:
@@ -217,12 +477,26 @@ def update_catalog(catalog: dict[str, Any]) -> list[str]:
         updates = {
             name: files
             for name, skill in catalog["skills"].items()
-            if skill["source"] == repository
-            and (files := fetch_skill(repository, new_ref, skill["upstreamPath"], name, tree_cache)) != current_files(name)
+            if skill.get("source") == repository
+            and (
+                files := render_skill(
+                    name,
+                    skill,
+                    fetch_skill(
+                        repository,
+                        new_ref,
+                        skill["upstreamPath"],
+                        skill.get("upstreamName", name),
+                        tree_cache,
+                        exclude=skill.get("exclude"),
+                    ),
+                )
+            )
+            != current_files(name)
         }
         license_data = read_source(repository, new_ref, details["licensePath"])
         license_data.decode("utf-8")
-        license_file = ROOT / safe_relative_path(details["licenseFile"]).as_posix()
+        license_file = repository_path(details["licenseFile"])
         if not license_file.is_file():
             raise ValueError(f"Missing current license file: {details['licenseFile']}")
         if updates or license_data != license_file.read_bytes():
@@ -241,28 +515,33 @@ def update_catalog(catalog: dict[str, Any]) -> list[str]:
     try:
         for name, files in skill_updates.items():
             target = temp_root / "skills" / name
-            for relative, data in files.items():
-                path = target / safe_relative_path(relative).as_posix()
-                path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(data)
+            skill = catalog["skills"][name]
+            stage_skill(
+                target, skill, catalog["sources"][skill["source"]]["ref"], files, tree_cache
+            )
         for path, data in license_updates.items():
             target = temp_root / safe_relative_path(path).as_posix()
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
         catalog_temp = temp_root / "catalog.json"
-        catalog_temp.write_text(json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        catalog_temp.write_text(
+            json.dumps(catalog, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+        )
 
         staged: list[tuple[Path, Path]] = [
-            (ROOT / "skills" / name, temp_root / "skills" / name)
-            for name in skill_updates
+            (ROOT / "skills" / name, temp_root / "skills" / name) for name in skill_updates
         ]
         staged.extend(
-            (ROOT / safe_relative_path(path).as_posix(), temp_root / safe_relative_path(path).as_posix())
+            (
+                ROOT / safe_relative_path(path).as_posix(),
+                temp_root / safe_relative_path(path).as_posix(),
+            )
             for path in license_updates
         )
         staged.append((CATALOG_PATH, catalog_temp))
         backup_root = temp_root / "backups"
         for index, (destination, replacement) in enumerate(staged):
+            destination = repository_path(destination.relative_to(ROOT).as_posix())
             if destination.is_symlink() or not destination.exists():
                 raise ValueError(f"Missing or unsafe destination: {destination.relative_to(ROOT)}")
             backup = backup_root / str(index)
@@ -294,22 +573,43 @@ def update_catalog(catalog: dict[str, Any]) -> list[str]:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--check", action="store_true", help="validate the local catalog without network access")
-    parser.add_argument("--verify-pins", action="store_true", help="verify the vendored files match their pinned upstream commits")
+    parser.add_argument(
+        "--check", action="store_true", help="validate the local catalog without network access"
+    )
+    parser.add_argument(
+        "--verify-pins",
+        action="store_true",
+        help="verify the vendored files match their pinned upstream commits",
+    )
+    parser.add_argument(
+        "--vendor",
+        action="store_true",
+        help="import all recorded upstream pins, including new catalog entries",
+    )
     args = parser.parse_args()
-    if args.check and args.verify_pins:
-        parser.error("--check and --verify-pins are mutually exclusive")
+    if sum((args.check, args.verify_pins, args.vendor)) > 1:
+        parser.error("--check, --verify-pins, and --vendor are mutually exclusive")
     try:
         catalog = load_catalog()
+        if args.vendor:
+            vendor_catalog(catalog)
         validate_local(catalog)
         if args.check:
-            print(f"Catalog valid: {len(catalog['skills'])} skills from {len(catalog['sources'])} pinned sources.")
+            print(
+                f"Catalog valid: {len(catalog['skills'])} skills from {len(catalog['sources'])} pinned sources."
+            )
         elif args.verify_pins:
             verify_pins(catalog)
-        else:
+        elif not args.vendor:
             update_catalog(catalog)
             validate_local(load_catalog())
-    except (OSError, ValueError, KeyError, json.JSONDecodeError, urllib.error.URLError) as error:
+    except (
+        OSError,
+        ValueError,
+        KeyError,
+        json.JSONDecodeError,
+        subprocess.TimeoutExpired,
+    ) as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
     return 0
